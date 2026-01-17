@@ -38,8 +38,8 @@ The lab instances come with these tools pre-installed:
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/salles-anderson/terraform-aws-ec2.git
-cd terraform-aws-ec2
+git clone https://github.com/salles-anderson/aws-tf-linux-lab.git
+cd aws-tf-linux-lab
 
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your settings
