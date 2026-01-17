@@ -1,81 +1,86 @@
-# AWS Terraform EC2
+# Linux Lab on AWS
 
-Infrastructure as Code for provisioning EC2 instances on AWS with VPC, subnets, and security groups using Terraform.
+A production-ready Terraform project for creating a Linux practice lab environment on AWS with Auto Scaling, SSM Session Manager access, and comprehensive tooling.
 
-![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonwebservices&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonwebservices&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+
+## Features
+
+- **Multi-AZ VPC** with public and private subnets
+- **Bastion Host** with SSM Session Manager (no SSH exposure)
+- **Auto Scaling Group** for lab instances with scaling policies
+- **VPC Endpoints** for private SSM access
+- **User Data Script** with pre-installed Linux tools and Docker
+- **Cost Optimized** - easy to destroy and recreate
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        AWS Cloud                             │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │                  VPC (10.0.0.0/16)                     │ │
-│  │                                                        │ │
-│  │  ┌──────────────────────────────────────────────────┐ │ │
-│  │  │           Public Subnet (10.0.1.0/24)            │ │ │
-│  │  │                                                  │ │ │
-│  │  │  ┌────────────────────────────────────────────┐ │ │ │
-│  │  │  │              EC2 Instance                  │ │ │ │
-│  │  │  │                                            │ │ │ │
-│  │  │  │  - Ubuntu AMI                              │ │ │ │
-│  │  │  │  - SSH Access (Port 22)                    │ │ │ │
-│  │  │  │  - Security Group Attached                 │ │ │ │
-│  │  │  │                                            │ │ │ │
-│  │  │  └────────────────────────────────────────────┘ │ │ │
-│  │  │                                                  │ │ │
-│  │  └──────────────────────────────────────────────────┘ │ │
-│  │                          │                            │ │
-│  │                          ▼                            │ │
-│  │                 ┌─────────────────┐                   │ │
-│  │                 │ Internet Gateway │                  │ │
-│  │                 └─────────────────┘                   │ │
-│  └────────────────────────────────────────────────────────┘ │
-│                          │                                  │
-│                          ▼                                  │
-│                      Internet                               │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              AWS Cloud (us-east-1)                            │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                          VPC (10.0.0.0/16)                              │  │
+│  │                                                                          │  │
+│  │  ┌─────────────────────────┐      ┌─────────────────────────┐          │  │
+│  │  │  Public Subnet A        │      │  Public Subnet B        │          │  │
+│  │  │  (10.0.1.0/24)          │      │  (10.0.2.0/24)          │          │  │
+│  │  │  ┌─────────────────┐    │      │                         │          │  │
+│  │  │  │  Bastion Host   │    │      │                         │          │  │
+│  │  │  │  (SSM Access)   │    │      │                         │          │  │
+│  │  │  └────────┬────────┘    │      │                         │          │  │
+│  │  │           │             │      │                         │          │  │
+│  │  │  ┌────────┴────────┐    │      │                         │          │  │
+│  │  │  │  NAT Gateway    │    │      │                         │          │  │
+│  │  └──┴─────────────────┴────┘      └─────────────────────────┘          │  │
+│  │           │                                                              │  │
+│  │  ┌────────┴────────────────┐      ┌─────────────────────────┐          │  │
+│  │  │  Private Subnet A       │      │  Private Subnet B       │          │  │
+│  │  │  (10.0.101.0/24)        │      │  (10.0.102.0/24)        │          │  │
+│  │  │  ┌─────────────────┐    │      │  ┌─────────────────┐    │          │  │
+│  │  │  │  Lab Instance   │    │      │  │  Lab Instance   │    │          │  │
+│  │  │  │  (ASG)          │    │      │  │  (ASG)          │    │          │  │
+│  │  │  └─────────────────┘    │      │  └─────────────────┘    │          │  │
+│  │  │  ┌─────────────────┐    │      │  ┌─────────────────┐    │          │  │
+│  │  │  │  VPC Endpoints  │    │      │  │  VPC Endpoints  │    │          │  │
+│  │  │  │  (SSM, EC2msg)  │    │      │  │  (SSM, EC2msg)  │    │          │  │
+│  │  └──┴─────────────────┴────┘      └──┴─────────────────┴────┘          │  │
+│  │                                                                          │  │
+│  │  ┌───────────────────┐                                                  │  │
+│  │  │  Internet Gateway │                                                  │  │
+│  └──┴───────────────────┴──────────────────────────────────────────────────┘  │
+│              │                                                                 │
+└──────────────┼─────────────────────────────────────────────────────────────────┘
+               │
+          [ Internet ]
 ```
 
-## Resources Created
+## Pre-installed Tools
 
-| Resource | Description |
-|----------|-------------|
-| VPC | Virtual Private Cloud (10.0.0.0/16) |
-| Subnet | Public subnet (10.0.1.0/24) |
-| Internet Gateway | Internet access for public subnet |
-| Security Group | Firewall rules (SSH ingress) |
-| EC2 Instance | Ubuntu-based compute instance |
+The lab instances come with these tools pre-installed:
 
-## Prerequisites
-
-- AWS Account
-- Terraform >= 1.0
-- AWS CLI configured
-- SSH key pair created in AWS
+| Category | Tools |
+|----------|-------|
+| System | htop, iotop, sysstat, tmux, vim |
+| Network | tcpdump, nmap, netcat, curl, wget, iperf3 |
+| Development | git, jq, build-essential, aws-cli |
+| Containers | docker, docker-compose |
+| Security | fail2ban, ufw |
 
 ## Quick Start
 
-### 1. Clone the repository
+### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/salles-anderson/aws-terraform-ec2.git
-cd aws-terraform-ec2
+git clone https://github.com/salles-anderson/terraform-aws-ec2.git
+cd terraform-aws-ec2
+
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your settings
 ```
 
-### 2. Configure variables
-
-Create a `terraform.tfvars` file:
-
-```hcl
-instance_type = "t3.micro"
-key_name      = "your-key-pair-name"
-```
-
-### 3. Initialize and Apply
+### 2. Deploy
 
 ```bash
 terraform init
@@ -83,156 +88,92 @@ terraform plan
 terraform apply
 ```
 
-### 4. Connect to EC2
+### 3. Connect to Instances
+
+**Via SSM Session Manager (Recommended):**
 
 ```bash
-ssh -i your-key.pem ubuntu@<public-ip>
+# Connect to Bastion
+aws ssm start-session --target <bastion-instance-id>
+
+# Connect directly to Lab Instance
+aws ssm start-session --target <lab-instance-id>
+```
+
+**Via SSH through Bastion:**
+
+```bash
+ssh -J ec2-user@<bastion-public-ip> ubuntu@<lab-private-ip>
+```
+
+### 4. Destroy When Done
+
+```bash
+terraform destroy
 ```
 
 ## Project Structure
 
 ```
 .
-├── main.tf              # Main resources (VPC, Subnet, EC2, SG)
-├── variables.tf         # Input variables
-├── provider.tf          # AWS provider configuration
-├── outputs.tf           # Output values (if exists)
-└── .github/
-    └── workflows/
-        └── terraform.yml  # CI/CD pipeline
+├── main.tf                 # Provider and locals
+├── vpc.tf                  # VPC, subnets, NAT, IGW, VPC Endpoints
+├── security-groups.tf      # Security groups
+├── iam.tf                  # IAM roles for SSM
+├── bastion.tf              # Bastion host
+├── asg.tf                  # Auto Scaling Group and policies
+├── outputs.tf              # Output values
+├── variables.tf            # Input variables
+├── terraform.tfvars.example # Example configuration
+├── scripts/
+│   └── user-data.sh        # Instance bootstrap script
+└── docs/
+    └── architecture-diagram.png
 ```
 
 ## Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `instance_type` | EC2 instance type | t3.micro |
-| `key_name` | AWS key pair name | - |
-| `region` | AWS region | us-east-1 |
-
-## CI/CD Pipeline
-
-GitHub Actions workflow included for automated deployments.
-
-### Required Secrets
-
-| Secret | Description |
-|--------|-------------|
-| `AWS_ACCESS_KEY_ID` | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
-
-### Pipeline Features
-
-- Terraform format check
-- Terraform validation
-- Plan on pull requests
-- Apply on merge to main
-
-## Security Considerations
-
-- SSH access is open to all IPs (0.0.0.0/0) - restrict in production
-- Use SSM Session Manager instead of SSH for better security
-- Enable VPC Flow Logs for network monitoring
-- Use IAM roles instead of access keys when possible
-
-## Reusable Modules
-
-For production environments, consider using the reusable Terraform modules library:
-
-**[modules-aws-tf](https://github.com/salles-anderson/modules-aws-tf)** - 47+ production-ready AWS modules
-
-### Example with VPC Module
-
-```hcl
-module "vpc" {
-  source = "git::https://github.com/salles-anderson/modules-aws-tf.git//modules/networking/vpc?ref=main"
-
-  project_name       = "my-project"
-  vpc_cidr           = "10.0.0.0/16"
-  azs                = ["us-east-1a", "us-east-1b"]
-  public_subnets     = ["10.0.1.0/24", "10.0.2.0/24"]
-  private_subnets    = ["10.0.101.0/24", "10.0.102.0/24"]
-  enable_nat_gateway = true
-}
-```
-
-### Example with EC2 Module
-
-```hcl
-module "ec2" {
-  source = "git::https://github.com/salles-anderson/modules-aws-tf.git//modules/compute/ec2-instance?ref=main"
-
-  name          = "my-instance"
-  instance_type = "t3.micro"
-  subnet_id     = module.vpc.public_subnet_ids[0]
-  vpc_id        = module.vpc.vpc_id
-}
-```
-
-### Available Module Categories
-
-| Category | Modules |
-|----------|---------|
-| Networking | VPC, ALB, NLB, Route53, CloudFront |
-| Compute | EC2, ECS, ECR, Kong Gateway |
-| Database | RDS, Aurora, DynamoDB, DocumentDB, ElastiCache |
-| Security | ACM, WAF, KMS, Secrets Manager, Security Groups |
-| Serverless | Lambda, SQS, Amplify, EventBridge |
-| Observability | CloudWatch Alarms, Dashboards, Log Groups |
-| Cost Optimization | EC2/RDS/DocumentDB Schedulers |
-
-## Extending the Infrastructure
-
-### Add more subnets
-
-```hcl
-resource "aws_subnet" "private" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.2.0/24"
-  tags       = { Name = "PrivateSubnet" }
-}
-```
-
-### Add Application Load Balancer
-
-```hcl
-resource "aws_lb" "main" {
-  name               = "my-alb"
-  internal           = false
-  load_balancer_type = "application"
-  subnets            = [aws_subnet.main.id]
-}
-```
-
-### Add RDS Database
-
-```hcl
-resource "aws_db_instance" "main" {
-  allocated_storage = 20
-  engine            = "postgres"
-  instance_class    = "db.t3.micro"
-  # ... more configuration
-}
-```
+| `project_name` | Project name for resource naming | `linux-lab` |
+| `environment` | Environment (dev, staging, prod) | `dev` |
+| `aws_region` | AWS region | `us-east-1` |
+| `vpc_cidr` | VPC CIDR block | `10.0.0.0/16` |
+| `instance_type` | Lab instance type | `t3.micro` |
+| `asg_min_size` | Minimum ASG size | `1` |
+| `asg_max_size` | Maximum ASG size | `3` |
+| `asg_desired_capacity` | Desired ASG capacity | `1` |
 
 ## Outputs
 
-After applying:
+| Output | Description |
+|--------|-------------|
+| `vpc_id` | VPC ID |
+| `bastion_instance_id` | Bastion instance ID |
+| `bastion_ssm_command` | SSM command to connect to Bastion |
+| `asg_name` | Auto Scaling Group name |
+| `ssm_connect_instructions` | Full connection instructions |
 
-```bash
-terraform output
-```
+## Security Features
 
-Returns:
-- EC2 public IP
-- VPC ID
-- Subnet ID
+- **No SSH exposed** - Access via SSM Session Manager only
+- **Private subnets** - Lab instances in private subnets
+- **VPC Endpoints** - SSM access without internet exposure
+- **IMDSv2 required** - Enhanced instance metadata security
+- **Encrypted volumes** - EBS encryption enabled
 
-## Cleanup
+## Cost Optimization
 
-```bash
-terraform destroy
-```
+- Use `terraform destroy` when not practicing
+- Single NAT Gateway (not HA) for lab purposes
+- t3.micro instances (Free Tier eligible)
+- Auto Scaling to scale down during low usage
+
+## Using Reusable Modules
+
+For production environments, consider using the reusable Terraform modules library:
+
+**[modules-aws-tf](https://github.com/salles-anderson/modules-aws-tf)** - 45+ production-ready AWS modules
 
 ## Author
 
